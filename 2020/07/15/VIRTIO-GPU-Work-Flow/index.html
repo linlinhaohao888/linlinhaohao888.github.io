@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- Head tag -->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+  <!--Description-->
+  
+
+  <!--Author-->
+  
+  <meta name="author" content="Andy Lin">
+  
+
+  <!--Open Graph Title-->
+  
+      <meta property="og:title" content="VIRTIO-GPU Work Flow"/>
+  
+  <!--Open Graph Description-->
+  
+  <!--Open Graph Site Name-->
+  <meta property="og:site_name" content="Andy Lin"/>
+  <!--Type page-->
+  
+      <meta property="og:type" content="article" />
+  
+  <!--Page Cover-->
+  
+
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <!-- Title -->
+  
+  <title>VIRTIO-GPU Work Flow - Andy Lin</title>
+
+
+  <link rel="shortcut icon" href="https://hexo.io/icon/favicon-96x96.png">
+
+  <!-- Custom CSS/Sass -->
+  
+<link rel="stylesheet" href="/css/style.css">
+
+
+  <!----------------------------
+  https://github.com/GallenHu/hexo-theme-Daily
+
+ _____            _   _
+|  __ \          (_) | |
+| |  | |   __ _   _  | |  _   _
+| |  | |  / _` | | | | | | | | |
+| |__| | | (_| | | | | | | |_| |
+|_____/   \__,_| |_| |_|  \__, |
+                          __/ |
+                         |___/
+
+    --------------------------->
+
+<meta name="generator" content="Hexo 4.2.1"></head>
+
+
+<body>
+
+  <!-- Nav -->
+  <header class="site-header">
+  <div class="header-inside">
+    <div class="logo">
+      <a href="/" rel="home">
+        
+        <img src="https://hexo.io/logo.svg" alt="Andy Lin" height="60">
+        
+      </a>
+    </div>
+    <!-- Navigation -->
+    <nav class="navbar">
+      <!-- Collect the nav links, forms, and other content for toggling -->
+      <div class="collapse">
+        <ul class="navbar-nav">
+          
+          
+            <li>
+              <a href="/.">
+                
+                  home
+                
+              </a>
+            </li>
+          
+            <li>
+              <a href="/archives">
+                
+                  archive
+                
+              </a>
+            </li>
+          
+        </ul>
+      </div>
+      <!-- /.navbar-collapse -->
+    </nav>
+    <div class="button-wrap">
+      <button class="menu-toggle">Primary Menu</button>
+    </div>
+  </div>
+</header>
+
+
+  <!-- Main Content -->
+  <div class="content-area">
+  <div class="post">
+    <!-- Post Content -->
+    <div class="container">
+      <article>
+        <!-- Title date & tags -->
+        <div class="post-header">
+          <h1 class="entry-title">
+            VIRTIO-GPU Work Flow
+            
+          </h1>
+          <p class="posted-on">
+          2020-07-15
+          </p>
+          <div class="tags-links">
+            
+              
+                <a href="/tags/VIRTIO Emulator QEMU GPU/" rel="tag">
+                  VIRTIO Emulator QEMU GPU
+                </a>
+              
+            
+          </div>
+        </div>
+        <!-- Post Main Content -->
+        <div class="entry-content has_line_number">
+          <h3 id="virtio虚拟化方案"><a href="#virtio虚拟化方案" class="headerlink" title="virtio虚拟化方案"></a>virtio虚拟化方案</h3><p>virtio-gpu属于virtio系列I/O虚拟化方案，采用类虚拟化设计，Guest端需要内置virtio驱动（&gt;Linux 4.4均已配置，Android x86源码<code>kernel/drivers/virtio</code>中可查看）。virtio驱动的基本结构为前后端设计，前端为Guest OS驱动，后端为模拟器端逻辑，前后端通过virtqueue队列（由环形缓冲区vring实现）进行数据交换。</p>
+<p><img src="/2020/07/15/VIRTIO-GPU-Work-Flow/virtio.gif" alt></p>
+<h3 id="Guest端"><a href="#Guest端" class="headerlink" title="Guest端"></a>Guest端</h3><ul>
+<li><p>操作系统启动时遍历PCI总线树，virtio-gpu作为一个PCI设备被OS检测到并注册</p>
+</li>
+<li><p><code>virtio_pci_common.c</code>中的<code>virtio_pci_probe</code>函数会根据PCI设备号创建<code>virtio_pci_device</code>，并将其添加到<code>virtio_bus</code></p>
+</li>
+<li><p>在<code>/sys/bus/virtio/drivers</code>中可以看到<code>virtio-gpu</code>设备</p>
+</li>
+<li><p>运行一个OpenGL应用，此时该应用会调用OpenGL库进行图形绘制</p>
+</li>
+<li><p>OpenGL指令会送至内核中的DRM（Direct Rendering Management）图形驱动，DRM驱动向GPU下达相应的图形指令（着色、光栅化、贴图什么的），具体的OpenGL-&gt;DRM-&gt;GPU流程看这里<a href="https://www.cnblogs.com/shoemaker/p/linux_graphics01.html" target="_blank" rel="noopener">https://www.cnblogs.com/shoemaker/p/linux_graphics01.html</a></p>
+</li>
+<li><p>Guest端的virtio-gpu设备截获DRM的相关指令，然后转换分解为自己定义的一套指令（具体指令类型见后）</p>
+</li>
+<li><p>将指令放到virtqueue中，然后告知QEMU：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">virtqueue_notify</span><br><span class="line">    vq-&gt;notify(_vq) &lt;-- vp_notify</span><br><span class="line">    iowrite16(vq-&gt;index, vp_dev-&gt;ioaddr + VIRTIO_PCI_QUEUE_NOTIFY)</span><br></pre></td></tr></table></figure>
+
+<p>方法是Guest写I/O寄存器，触发VM Exit进入到KVM中处理，进入到Host端流程</p>
+</li>
+</ul>
+<h3 id="Host端"><a href="#Host端" class="headerlink" title="Host端"></a>Host端</h3><ul>
+<li><p>KVM无法处理而退出，处理退出原因发现是<code>KVM_EXIT_IO</code>，进而调用相应的Handle函数</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">kvm_cpu_exec</span><span class="params">(CPUArchState *env)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">do</span> &#123;</span><br><span class="line">        run_ret = kvm_vcpu_ioctl(env, KVM_RUN, <span class="number">0</span>);</span><br><span class="line">        <span class="keyword">switch</span> (<span class="built_in">run</span>-&gt;exit_reason) &#123; <span class="comment">/* 处理退出原因 */</span></span><br><span class="line">        <span class="keyword">case</span> KVM_EXIT_IO:</span><br><span class="line">            kvm_handle_io();</span><br><span class="line">            ...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><code>kvm_handle_io</code>通过<code>write eventfd</code>将等待<code>poll</code>的QEMU主线程唤醒，然后一步步走到virtio-gpu的I/O handlers。其中与virtio-gpu有关的virtqueue有两个：<code>ctrl_vq</code>负责交换图形命令，<code>cursor_vq</code>负责交换光标信息；</p>
+<p>从而相应也有两个handlers：<code>virtio_gpu_handle_ctrl</code>和<code>virtio_gpu_handle_cursor</code>，两个函数在<code>hw/display/virtio-gpu.c</code>；</p>
+<p>handler的注册在GCC编译时设定为在main函数前执行，位于<code>virtio_gpu_device_realize</code>函数中，具体见QOM编程模型<a href="https://blog.csdn.net/u011364612/article/details/53581411和相关的GCC" target="_blank" rel="noopener">https://blog.csdn.net/u011364612/article/details/53581411和相关的GCC</a> trick<a href="https://blog.csdn.net/u011364612/article/details/53581501" target="_blank" rel="noopener">https://blog.csdn.net/u011364612/article/details/53581501</a></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">main  main_loop main_loop_wait</span><br><span class="line">    os_host_main_loop_wait</span><br><span class="line">        glib_pollfds_poll</span><br><span class="line">            g_main_context_dispatch </span><br><span class="line">                aio_ctx_dispatch    aio_dispatch</span><br><span class="line">                    virtio_queue_host_notifier_read</span><br><span class="line">                        virtio_queue_notify_vq </span><br><span class="line">                            virtio_gpu_handle_ctrl virtio_gpu_handle_cursor</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>以<code>virtio_gpu_handle_ctrl</code>继续向下，到<code>virtio_gpu_handle_ctrl</code>，其首先从virtqueue中取出Guest端传来的命令，然后进行处理</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">virtio_gpu_process_cmdq</span><span class="params">(VirtIOGPU *g)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">virtio_gpu_ctrl_command</span> *<span class="title">cmd</span>;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> (!QTAILQ_EMPTY(&amp;g-&gt;cmdq)) &#123;</span><br><span class="line">        <span class="comment">/* 取命令 */</span></span><br><span class="line">        cmd = QTAILQ_FIRST(&amp;g-&gt;cmdq);</span><br><span class="line">        </span><br><span class="line">        ...</span><br><span class="line"></span><br><span class="line">        <span class="comment">/* 处理命令 */</span></span><br><span class="line">        VIRGL(g, virtio_gpu_virgl_process_cmd, virtio_gpu_simple_process_cmd,</span><br><span class="line">              g, cmd);</span><br><span class="line">        QTAILQ_REMOVE(&amp;g-&gt;cmdq, cmd, next);</span><br><span class="line">        ...</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>virtio_gpu_ctrl_command</code>为Guest端解析DRM驱动指令重新构成的virtio命令格式</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">virtio_gpu_ctrl_command</span> &#123;</span></span><br><span class="line">    VirtQueueElement elem;                       <span class="comment">// 取出的命令被映射到这里</span></span><br><span class="line">    VirtQueue *vq;                               <span class="comment">// Host/Guest共享的队列</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">virtio_gpu_ctrl_hdr</span> <span class="title">cmd_hdr</span>;</span>          <span class="comment">// 命令指定的header，指定了命令类型</span></span><br><span class="line">    <span class="keyword">uint32_t</span> error;</span><br><span class="line">    <span class="keyword">bool</span> finished;</span><br><span class="line">    QTAILQ_ENTRY(virtio_gpu_ctrl_command) next;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>处理命令的<code>VIRGL</code>宏如下，这里用了<code>libvirglrenderer</code></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">ifdef</span> CONFIG_VIRGL</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">include</span> <span class="meta-string">&lt;virglrenderer.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> VIRGL(_g, _virgl, _simple, ...)                     \</span></span><br><span class="line">    <span class="keyword">do</span> &#123;                                                    \</span><br><span class="line">        <span class="keyword">if</span> (_g-&gt;parent_obj.use_virgl_renderer) &#123;            \</span><br><span class="line">            _virgl(__VA_ARGS__);                            \</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;                                            \</span><br><span class="line">            _simple(__VA_ARGS__);                           \</span><br><span class="line">        &#125;                                                   \</span><br><span class="line">    &#125; <span class="keyword">while</span> (<span class="number">0</span>)</span><br><span class="line"><span class="meta">#<span class="meta-keyword">else</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> VIRGL(_g, _virgl, _simple, ...)                 \</span></span><br><span class="line">    <span class="keyword">do</span> &#123;                                                \</span><br><span class="line">        _simple(__VA_ARGS__);                           \</span><br><span class="line">    &#125; <span class="keyword">while</span> (<span class="number">0</span>)</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br></pre></td></tr></table></figure>
+
+<p>有<code>virgl</code>支持则能进行3D加速，否则只能进行2D加速，在Windows上目前直接使用<code>virtio-vga</code>会黑屏可能是已经没有所谓的2D加速这种东西了吧</p>
+</li>
+<li><p><code>_simple</code>对应<code>virtio_gpu_simple_process_cmd</code>，3D加速对应的函数差不多</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">virtio_gpu_simple_process_cmd</span><span class="params">(VirtIOGPU *g,</span></span></span><br><span class="line"><span class="function"><span class="params">                                          struct virtio_gpu_ctrl_command *cmd)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    VIRTIO_GPU_FILL_CMD(cmd-&gt;cmd_hdr);</span><br><span class="line">    virtio_gpu_ctrl_hdr_bswap(&amp;cmd-&gt;cmd_hdr);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">switch</span> (cmd-&gt;cmd_hdr.type) &#123; <span class="comment">//type就是命令类型</span></span><br><span class="line">    <span class="keyword">case</span> VIRTIO_GPU_CMD_GET_DISPLAY_INFO:</span><br><span class="line">        virtio_gpu_get_display_info(g, cmd);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> VIRTIO_GPU_CMD_GET_EDID:</span><br><span class="line">        virtio_gpu_get_edid(g, cmd);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> VIRTIO_GPU_CMD_RESOURCE_CREATE_2D:          <span class="comment">// 创建2D资源，仅有长宽和格式，没有像素信息，像素信息单独传</span></span><br><span class="line">        virtio_gpu_resource_create_2d(g, cmd);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> VIRTIO_GPU_CMD_RESOURCE_UNREF:</span><br><span class="line">        virtio_gpu_resource_unref(g, cmd);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> VIRTIO_GPU_CMD_RESOURCE_FLUSH:             <span class="comment">// 将处理好的图形送到显示器</span></span><br><span class="line">        virtio_gpu_resource_flush(g, cmd);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D:        <span class="comment">// 交给Host的pixman库进行图形处理，比如明暗、光栅化处理</span></span><br><span class="line">        virtio_gpu_transfer_to_host_2d(g, cmd);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> VIRTIO_GPU_CMD_SET_SCANOUT:</span><br><span class="line">        virtio_gpu_set_scanout(g, cmd);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING:    <span class="comment">// 获取像素信息并和2D资源绑定</span></span><br><span class="line">        virtio_gpu_resource_attach_backing(g, cmd);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> VIRTIO_GPU_CMD_RESOURCE_DETACH_BACKING:</span><br><span class="line">        virtio_gpu_resource_detach_backing(g, cmd);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">default</span>:</span><br><span class="line">        cmd-&gt;error = VIRTIO_GPU_RESP_ERR_UNSPEC;</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (!cmd-&gt;finished) &#123;</span><br><span class="line">        virtio_gpu_ctrl_response_nodata(g, cmd, cmd-&gt;error ? cmd-&gt;error :</span><br><span class="line">                                        VIRTIO_GPU_RESP_OK_NODATA);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>具体的各流程和结构体解释见<a href="https://blog.csdn.net/huang987246510/article/details/106254294/" target="_blank" rel="noopener">https://blog.csdn.net/huang987246510/article/details/106254294/</a></p>
+</li>
+<li><p><code>pixman</code>库处理完后由<code>dpy_gfx_update</code>刷新显示器</p>
+</li>
+</ul>
+
+        </div>
+      </article>
+    </div>
+    <!-- Comments -->
+    <div class="container">
+      
+<section id="comment">
+  <!-- <h1 class="title">Comments</h1> -->
+
+  
+</section>
+
+
+    </div>
+    <!-- Pre or Next -->
+    <div class="nav-links">
+      
+      
+        <div class="nav-next">
+          <a href="/2020/07/15/hello-world/" rel="prev">Newer Posts <span class="meta-arraw meta-arraw-right"></span></a>
+        </div>
+      
+    </div>
+
+  </div>
+</div>
+
+
+  <!-- Footer -->
+  <!-- Footer-widgets -->
+<div class="footer-widgets">
+  <div class="row inside-wrapper">
+    <div class="col-1-3">
+      <aside>
+        <h1 class="widget-title">关于本站</h1>
+        <div class="custom-widget-content">
+          
+          <ul><li><a href="https://github.com/GallenHu/hexo-theme-Daily/wiki" target="_blank" rel="noopener">如何自定义这里的内容(配置教程)?</a></li></ul>
+        </div>
+      </aside>
+    </div>
+    <div class="col-1-3">
+      <aside>
+        <h1 class="widget-title">Contact</h1>
+        <div class="widget-text">
+          
+            
+              <a href="https://github.com/GallenHu" class="icon icon-github" target="_blank">github</a>
+            
+          
+        </div>
+      </aside>
+    </div>
+    <div class="col-1-3">
+      <aside>
+        <h1 class="widget-title">Search</h1>
+        <div class="widget-text">
+          <form onSubmit="return appDaily.submitSearch('')">
+            <p>
+              <input type="text" placeholder="search..." id="homeSearchInput">
+            </p>
+            <!-- <input type="submit" value="GO"> -->
+          </form>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+<!-- Footer -->
+<footer class="site-info">
+  <p>
+    <span>Andy Lin &copy; 2020</span>
+    
+      <span class="split">|</span>
+      <span>Powered by <a href="https://hexo.io/" target="_blank">Hexo</a> with Theme <a href="https://github.com/GallenHu/hexo-theme-Daily" target="_blank">Daily</a></span>
+    
+  </p>
+</footer>
+
+
+  <!-- After footer scripts -->
+  <!-- scripts -->
+
+<script src="/js/app.js"></script>
+
+
+
+
+
+
+</body>
+
+</html>
