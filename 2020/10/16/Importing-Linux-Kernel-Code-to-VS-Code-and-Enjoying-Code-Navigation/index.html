@@ -16,7 +16,7 @@
 
   <!--Open Graph Title-->
   
-      <meta property="og:title" content="Andy Lin"/>
+      <meta property="og:title" content="Importing Linux Kernel Code to VS Code and Enjoying Code Navigation"/>
   
   <!--Open Graph Description-->
   
@@ -24,7 +24,7 @@
   <meta property="og:site_name" content="Andy Lin"/>
   <!--Type page-->
   
-      <meta property="og:type" content="website" />
+      <meta property="og:type" content="article" />
   
   <!--Page Cover-->
   
@@ -33,7 +33,7 @@
 
   <!-- Title -->
   
-  <title>Andy Lin</title>
+  <title>Importing Linux Kernel Code to VS Code and Enjoying Code Navigation - Andy Lin</title>
 
 
   <link rel="shortcut icon" href="https://hexo.io/icon/favicon-96x96.png">
@@ -107,130 +107,73 @@
 
 
   <!-- Main Content -->
-  <div class="site-content home">
-  <main class="content-area">
-    
-      
-        <div class="even">
-          
+  <div class="content-area">
+  <div class="post">
+    <!-- Post Content -->
+    <div class="container">
+      <article>
+        <!-- Title date & tags -->
+        <div class="post-header">
+          <h1 class="entry-title">
+            Importing Linux Kernel Code to VS Code and Enjoying Code Navigation
+            
+          </h1>
+          <p class="posted-on">
+          2020-10-16
+          </p>
+          <div class="tags-links">
+            
+              
+                <a href="/tags/Kernel Code/" rel="tag">
+                  Kernel Code
+                </a>
+              
+            
+          </div>
+        </div>
+        <!-- Post Main Content -->
+        <div class="entry-content has_line_number">
+          <p>In this post I’ll take you to import kernel code to VS Code for a nice code viewing and developing experiences. You can say goodbye to CLion which eats your memory without mercy. This tutorial will be based on the Android-x86 source tree which contains Linux kernel almost identical to the upstream kernel.</p>
+<ul>
+<li>The first step is installing VS Code of course. I’ll simply skip this step for any experienced developers.</li>
+<li>Now search and install the C/C++ Extension in VS Code’s extension market.</li>
+<li>Build the kernel before you do anything else.</li>
+<li>Use a magical script named <code>gen_compile_commands.py</code> in the <code>kernel/script</code> file. If it does not exist, you can find it in the upstream Linux kernel repository (<a href="https://github.com/torvalds/linux/blob/master/scripts/gen_compile_commands.py" target="_blank" rel="noopener">https://github.com/torvalds/linux/blob/master/scripts/gen_compile_commands.py</a>).</li>
+<li>Run the command by <code>python gen_compile_commands.py -d ${path-to-kernel-build-directory}</code>. In the case of Android-x86, the corresponding kernel build path is <code>out/target/product/{x86_64}/obj/kernel</code> ({} denotes that this name can vary depending on your chosen build target).</li>
+<li>After that you can find you <code>compile_commands.json</code> in the kernel build path.</li>
+<li>Now go back to VS Code and enter <code>Ctrl+Shift+P</code> to initiate command execution.</li>
+<li>Enter <code>&gt;C/C++: Edit Configurations (UI)</code> (you should get prompted even if you have not finished the command).</li>
+<li>Now open <code>Advanced Settings</code> and find the <code>Compile commands</code> setting.</li>
+<li>Enter the path to your <code>compile_commands.json</code> and you are good to go! Enjoy  your VS Code journey.</li>
+</ul>
 
-<!-- 首页模板 -->
-<div class="container">
-  <article class="post">
-    
-    <h1 class="entry-title">
-      <a href="/2020/10/16/Importing-Linux-Kernel-Code-to-VS-Code-and-Enjoying-Code-Navigation/" rel="bookmark">
-        Importing Linux Kernel Code to VS Code and Enjoying Code Navigation
-      </a>
-    </h1>
-    
-
-    <p class="posted-on">
-    2020-10-16
-    </p>
-    <div class="tags-links">
-      
-      <a href="/tags/Kernel Code/" rel="tag">
-        Kernel Code
-      </a>
-      
+        </div>
+      </article>
     </div>
-  </article>
-</div>
-        </div> 
+    <!-- Comments -->
+    <div class="container">
       
-    
-      
-        <div class="odd">
-          
+<section id="comment">
+  <!-- <h1 class="title">Comments</h1> -->
 
-<!-- 首页模板 -->
-<div class="container">
-  <article class="post">
-    
-    <h1 class="entry-title">
-      <a href="/2020/10/07/Write-A-Demo-Android-Kernel-Driver/" rel="bookmark">
-        Write A Demo Android Kernel Driver
-      </a>
-    </h1>
-    
+  
+</section>
 
-    <p class="posted-on">
-    2020-10-07
-    </p>
-    <div class="tags-links">
-      
-      <a href="/tags/Android Kernel Driver/" rel="tag">
-        Android Kernel Driver
-      </a>
-      
+
     </div>
-  </article>
-</div>
+    <!-- Pre or Next -->
+    <div class="nav-links">
+      
+      
+        <div class="nav-next">
+          <a href="/2020/10/07/Write-A-Demo-Android-Kernel-Driver/" rel="prev">Newer Posts <span class="meta-arraw meta-arraw-right"></span></a>
         </div>
       
-    
-      
-        <div class="even">
-          
-
-<!-- 首页模板 -->
-<div class="container">
-  <article class="post">
-    
-    <h1 class="entry-title">
-      <a href="/2020/07/15/VIRTIO-GPU-Work-Flow/" rel="bookmark">
-        VIRTIO-GPU Work Flow
-      </a>
-    </h1>
-    
-
-    <p class="posted-on">
-    2020-07-15
-    </p>
-    <div class="tags-links">
-      
-      <a href="/tags/VIRTIO Emulator QEMU GPU/" rel="tag">
-        VIRTIO Emulator QEMU GPU
-      </a>
-      
     </div>
-  </article>
+
+  </div>
 </div>
-        </div> 
-      
-    
-      
-        <div class="odd">
-          
 
-<!-- 首页模板 -->
-<div class="container">
-  <article class="post">
-    
-    <h1 class="entry-title">
-      <a href="/2020/07/15/hello-world/" rel="bookmark">
-        Hello World
-      </a>
-    </h1>
-    
-
-    <p class="posted-on">
-    2020-07-15
-    </p>
-    <div class="tags-links">
-      
-    </div>
-  </article>
-</div>
-        </div>
-      
-    
-
-    
-
-  </main>
-</div>
 
   <!-- Footer -->
   <!-- Footer-widgets -->
